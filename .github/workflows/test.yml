@@ -100,8 +100,8 @@ jobs:
         with:
           push: true
           tags: |
-            eric330/601_module14:latest
-            eric330/601_module14:${{ github.sha }}
+            eric330/601_final-project:latest
+            eric330/601_final-project:${{ github.sha }}
           platforms: linux/amd64,linux/arm64
-          cache-from: type=registry,ref=eric330/601_module14:cache
+          cache-from: type=registry,ref=eric330/601_final-project:cache
           cache-to: type=inline,mode=max
