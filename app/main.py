@@ -13,16 +13,15 @@ This module defines the main FastAPI application, including:
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 from uuid import UUID
-from typing import List
+from typing import List, Literal
 
-from fastapi import Body, FastAPI, Depends, HTTPException, status, Request, Form
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi import FastAPI, Depends, HTTPException, status, Request
+from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from sqlalchemy.orm import Session
-
 import uvicorn
 
 # Application imports
@@ -33,14 +32,16 @@ from app.schemas.calculation import (
     CalculationBase,
     CalculationResponse,
     CalculationUpdate,
-    CalculationOnlyResponse,   # NEW: response for compute-only
 )
 from app.schemas.token import TokenResponse
 from app.schemas.user import UserCreate, UserResponse, UserLogin
 from app.database import Base, get_db, engine
 
-# NEW: compute helper that supports power/mod and other ops
-from app.operations import compute
+# Operations used by the compute endpoint
+from app.operations import add, subtract, multiply, divide, power, mod
+
+# Pydantic for the compute-only request/response
+from pydantic import BaseModel
 
 
 # ------------------------------------------------------------------------------
@@ -253,15 +254,48 @@ def delete_calculation(calc_id: str, current_user = Depends(get_current_active_u
     return None
 
 # ------------------------------------------------------------------------------
-# NEW: Compute-only endpoint (no DB writes) for advanced ops (power/mod/etc.)
+# Compute-only endpoint (no DB writes) for advanced ops (power/mod/etc.)
 # ------------------------------------------------------------------------------
-@app.post("/calculations/compute", response_model=CalculationOnlyResponse, tags=["calculations"])
-def compute_endpoint(req: CalculationBase):
+
+class ComputeRequest(BaseModel):
+    # keep it focused so schema does NOT reject b=0 (422)
+    type: Literal["add", "subtract", "multiply", "divide", "power", "mod"]
+    inputs: List[float]
+
+class ComputeResponse(BaseModel):
+    result: float
+
+@app.post("/calculations/compute", response_model=ComputeResponse, tags=["calculations"])
+def compute_endpoint(req: ComputeRequest):
     """
-    Compute-only API for the additional calculation types.
+    Compute-only API for additional calculation types.
     Accepts { type, inputs } and returns { result } with no DB writes.
+    Route-level validation ensures divide/mod by zero -> HTTP 400.
     """
-    return CalculationOnlyResponse(result=compute(req.type, req.inputs))
+    if not isinstance(req.inputs, list) or len(req.inputs) < 2:
+        raise HTTPException(status_code=400, detail="At least two inputs are required.")
+
+    a, b = req.inputs[0], req.inputs[1]
+
+    if req.type in ("divide", "mod") and b == 0:
+        # This is the key difference: return 400 (bad request), not 422
+        msg = "Cannot divide by zero!" if req.type == "divide" else "Cannot mod by zero!"
+        raise HTTPException(status_code=400, detail=msg)
+
+    ops = {
+        "add": add,
+        "subtract": subtract,
+        "multiply": multiply,
+        "divide": divide,
+        "power": power,
+        "mod": mod,
+    }
+    fn = ops.get(req.type)
+    if fn is None:
+        raise HTTPException(status_code=400, detail="Unsupported calculation type.")
+
+    return ComputeResponse(result=float(fn(a, b)))
+
 
 # ------------------------------------------------------------------------------
 # Main
