@@ -1,120 +1,83 @@
-# app/operations.py
+# app/operations/__init__.py
 
-"""
-Module: operations.py
+from typing import List, Union
+from fastapi import HTTPException
+from app.schemas.calculation import CalculationType
 
-This module contains basic arithmetic functions that perform addition, subtraction,
-multiplication, and division of two numbers. These functions are foundational for
-building more complex applications, such as calculators or financial tools.
-
-Functions:
-- add(a: Union[int, float], b: Union[int, float]) -> Union[int, float]: Returns the sum of a and b.
-- subtract(a: Union[int, float], b: Union[int, float]) -> Union[int, float]: Returns the difference when b is subtracted from a.
-- multiply(a: Union[int, float], b: Union[int, float]) -> Union[int, float]: Returns the product of a and b.
-- divide(a: Union[int, float], b: Union[int, float]) -> float: Returns the quotient when a is divided by b. Raises ValueError if b is zero.
-
-Usage:
-These functions can be imported and used in other modules or integrated into APIs
-to perform arithmetic operations based on user input.
-"""
-
-from typing import Union  # Import Union for type hinting multiple possible types
-
-# Define a type alias for numbers that can be either int or float
 Number = Union[int, float]
 
 def add(a: Number, b: Number) -> Number:
-    """
-    Add two numbers and return the result.
-
-    Parameters:
-    - a (int or float): The first number to add.
-    - b (int or float): The second number to add.
-
-    Returns:
-    - int or float: The sum of a and b.
-
-    Example:
-    >>> add(2, 3)
-    5
-    >>> add(2.5, 3)
-    5.5
-    """
-    # Perform addition of a and b
-    result = a + b
-    return result
+    return a + b
 
 def subtract(a: Number, b: Number) -> Number:
-    """
-    Subtract the second number from the first and return the result.
-
-    Parameters:
-    - a (int or float): The number from which to subtract.
-    - b (int or float): The number to subtract.
-
-    Returns:
-    - int or float: The difference between a and b.
-
-    Example:
-    >>> subtract(5, 3)
-    2
-    >>> subtract(5.5, 2)
-    3.5
-    """
-    # Perform subtraction of b from a
-    result = a - b
-    return result
+    return a - b
 
 def multiply(a: Number, b: Number) -> Number:
-    """
-    Multiply two numbers and return the product.
-
-    Parameters:
-    - a (int or float): The first number to multiply.
-    - b (int or float): The second number to multiply.
-
-    Returns:
-    - int or float: The product of a and b.
-
-    Example:
-    >>> multiply(2, 3)
-    6
-    >>> multiply(2.5, 4)
-    10.0
-    """
-    # Perform multiplication of a and b
-    result = a * b
-    return result
+    return a * b
 
 def divide(a: Number, b: Number) -> float:
-    """
-    Divide the first number by the second and return the quotient.
-
-    Parameters:
-    - a (int or float): The dividend.
-    - b (int or float): The divisor.
-
-    Returns:
-    - float: The quotient of a divided by b.
-
-    Raises:
-    - ValueError: If b is zero, as division by zero is undefined.
-
-    Example:
-    >>> divide(6, 3)
-    2.0
-    >>> divide(5.5, 2)
-    2.75
-    >>> divide(5, 0)
-    Traceback (most recent call last):
-        ...
-    ValueError: Cannot divide by zero!
-    """
-    # Check if the divisor is zero to prevent division by zero
+    # IMPORTANT: keep ValueError for unit tests
     if b == 0:
-        # Raise a ValueError with a descriptive message
         raise ValueError("Cannot divide by zero!")
-    
-    # Perform division of a by b and return the result as a float
-    result = a / b
-    return result
+    return a / b
+
+def power(a: Number, b: Number) -> Number:
+    return a ** b
+
+def mod(a: Number, b: Number) -> Number:
+    # IMPORTANT: keep ValueError for unit tests
+    if b == 0:
+        raise ValueError("Cannot mod by zero!")
+    # return int(a) % int(b)  # <- uncomment for strict integer mod
+    return a % b
+
+def compute(calc_type: CalculationType, inputs: List[Number]) -> float:
+    """
+    Higher-level compute used by the API. Accepts a calc type and list of inputs.
+    - add/sub/mul/div: allow 2+ inputs (div checks zeros)
+    - power/mod: exactly two inputs (a, b)
+    Converts domain ValueError -> HTTPException for API ergonomics.
+    """
+    if len(inputs) < 2:
+        raise HTTPException(status_code=400, detail="At least two inputs are required")
+
+    a, *rest = inputs
+    try:
+        if calc_type == CalculationType.ADDITION:
+            return float(sum(inputs))
+
+        if calc_type == CalculationType.SUBTRACTION:
+            total = a
+            for x in rest:
+                total -= x
+            return float(total)
+
+        if calc_type == CalculationType.MULTIPLICATION:
+            total: float = 1.0
+            for x in inputs:
+                total *= x
+            return float(total)
+
+        if calc_type == CalculationType.DIVISION:
+            total = float(a)
+            for x in rest:
+                total = divide(total, x)  # may raise ValueError
+            return float(total)
+
+        if calc_type == CalculationType.POWER:
+            if len(inputs) != 2:
+                raise ValueError("Power expects exactly two inputs")
+            return float(power(inputs[0], inputs[1]))
+
+        if calc_type == CalculationType.MOD:
+            if len(inputs) != 2:
+                raise ValueError("Mod expects exactly two inputs")
+            return float(mod(inputs[0], inputs[1]))  # may raise ValueError
+
+        raise ValueError("Unsupported operation")
+
+    except ValueError as e:
+        # Translate domain errors to HTTP errors for API callers
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+__all__ = ["add", "subtract", "multiply", "divide", "power", "mod", "compute"]
