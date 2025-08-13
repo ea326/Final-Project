@@ -262,3 +262,17 @@ Then submit the GitHub repository link as instructed.
 - [Python Downloads](https://www.python.org/downloads/)
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 - [GitHub SSH Setup Guide](https://docs.github.com/en/authentication/connecting-to-github-with-ssh)
+
+---
+
+## ✨ New Features: `power` and `mod` Operations
+
+This project now supports two additional mathematical operations:
+
+- **`power`** — Raises the first number to the power of the second.  
+  **Example:** `{"type":"power","inputs":[2,3]}` → **Result:** `8`
+
+- **`mod`** — Returns the remainder when the first number is divided by the second.  
+  **Example:** `{"type":"mod","inputs":[10,3]}` → **Result:** `1`
+
+Both operations are fully tested in unit and integration tests, and available through the `/calculations/compute` API endpoint.
